@@ -1,44 +1,43 @@
--- Drop existing policies
-DROP POLICY IF EXISTS "experts_insert_public" ON public.experts;
-DROP POLICY IF EXISTS "experts_select_admin" ON public.experts;
+-- Enable RLS on tables
+ALTER TABLE public.experts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ahp_submissions ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "experts_insert_anyone" ON public.experts;
+DROP POLICY IF EXISTS "experts_select_authenticated" ON public.experts;
 DROP POLICY IF EXISTS "experts_delete_authenticated" ON public.experts;
-DROP POLICY IF EXISTS "ahp_submissions_insert_public" ON public.ahp_submissions;
-DROP POLICY IF EXISTS "ahp_submissions_select_admin" ON public.ahp_submissions;
+DROP POLICY IF EXISTS "ahp_submissions_insert_anyone" ON public.ahp_submissions;
+DROP POLICY IF EXISTS "ahp_submissions_select_authenticated" ON public.ahp_submissions;
 DROP POLICY IF EXISTS "ahp_submissions_delete_authenticated" ON public.ahp_submissions;
 
--- New RLS policies that allow anonymous inserts but require auth for selects and deletes
--- Allow anyone to insert experts (for public form submissions)
+-- Experts table policies
 CREATE POLICY "experts_insert_anyone" ON public.experts
   FOR INSERT
   TO anon, authenticated
   WITH CHECK (true);
 
--- Only authenticated users can view experts
 CREATE POLICY "experts_select_authenticated" ON public.experts
   FOR SELECT
   TO authenticated
   USING (true);
 
--- Only authenticated users can delete experts (for admin dashboard)
 CREATE POLICY "experts_delete_authenticated" ON public.experts
   FOR DELETE
   TO authenticated
-  USING (auth.role() = 'authenticated');
+  USING (true);
 
--- Allow anyone to insert submissions (for public form submissions)
+-- AHP submissions table policies
 CREATE POLICY "ahp_submissions_insert_anyone" ON public.ahp_submissions
   FOR INSERT
   TO anon, authenticated
   WITH CHECK (true);
 
--- Only authenticated users can view submissions
 CREATE POLICY "ahp_submissions_select_authenticated" ON public.ahp_submissions
   FOR SELECT
   TO authenticated
   USING (true);
 
--- Only authenticated users can delete submissions (for admin dashboard)
 CREATE POLICY "ahp_submissions_delete_authenticated" ON public.ahp_submissions
   FOR DELETE
   TO authenticated
-  USING (auth.role() = 'authenticated');
+  USING (true);

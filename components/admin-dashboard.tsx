@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
-import { Loader2, CheckCircle2, TrendingUp, Users, Download } from "lucide-react"
+import { Loader2, CheckCircle2, TrendingUp, Users, Download, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { toast } from "@/hooks/use-toast"
 
 const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49, 1.51, 1.53, 1.56, 1.58, 1.59]
 
@@ -128,7 +130,15 @@ export default function AdminDashboard() {
     console.log("[v0] AdminDashboard: Fetching data")
     // </CHANGE>
     try {
-      const response = await fetch("/api/admin/submissions")
+      // Add cache busting to avoid browser caching issues
+      const response = await fetch("/api/admin/submissions", {
+        cache: "no-store",  // This tells the browser not to cache the response
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        }
+      })
       if (!response.ok) throw new Error("Failed to fetch data")
       const data = await response.json()
       console.log("[v0] AdminDashboard: Data fetched successfully", { expertCount: data.experts.length })
@@ -1199,9 +1209,242 @@ export default function AdminDashboard() {
   }
   // </CHANGE>
 
+  const deleteExpertSubmission = async (expertId: string, expertName: string) => {
+    try {
+      console.log("Attempting to delete expert with ID:", expertId);
+
+      const response = await fetch("/api/admin/submissions", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ expertId }),
+      });
+
+      console.log("Delete response status:", response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Delete response data:", result);
+
+        // Check if the expert actually existed before deletion
+        if (result.expertExistedBefore === 0) {
+          toast({
+            title: "Info",
+            description: `Expert ${expertName} may have already been deleted or does not exist.`,
+          });
+        } else {
+          // Refresh the data to ensure UI is up-to-date with the database
+          console.log("Refreshing data after deletion...");
+          fetchData();
+          toast({
+            title: "Success",
+            description: `Expert submission from ${expertName} has been deleted successfully.`,
+          });
+        }
+      } else {
+        const errorData = await response.json();
+        console.error("Delete error response:", errorData);
+        toast({
+          title: "Error",
+          description: `Failed to delete expert submission: ${errorData.error || "Unknown error"}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting expert submission:", error);
+      toast({
+        title: "Error",
+        description: `An error occurred while deleting the expert submission: ${error.message || "Unknown error"}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadAggregatedResultsCSV = () => {
+    if (!aggregatedResults || "acceptedCount" in aggregatedResults && aggregatedResults.acceptedCount === 0) {
+      toast({
+        title: "No Data Available",
+        description: "No aggregated results available to download.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare CSV data for aggregated results
+    const csvRows = [];
+
+    // Add header information
+    csvRows.push(["AHP Aggregated Results Report"]);
+    csvRows.push(["Generated on:", new Date().toLocaleString()]);
+    csvRows.push([]);
+
+    // Add step acceptance summary
+    if ("stepAcceptance" in aggregatedResults) {
+      const { stepAcceptance } = aggregatedResults as Exclude<AggregatedResults, { acceptedCount: 0 }>;
+      csvRows.push(["Step Acceptance Summary"]);
+      csvRows.push(["Step", "Accepted Count", "Needs Review Count"]);
+      csvRows.push(["Step 1: Criteria", stepAcceptance.criteria.accepted, stepAcceptance.criteria.needsReview]);
+      csvRows.push(["Step 2: Coding Hours", stepAcceptance.coding.accepted, stepAcceptance.coding.needsReview]);
+      csvRows.push(["Step 3: Study Hours", stepAcceptance.study.accepted, stepAcceptance.study.needsReview]);
+      csvRows.push(["Step 4: Attendance", stepAcceptance.attendance.accepted, stepAcceptance.attendance.needsReview]);
+      csvRows.push([]);
+    }
+
+    // Function to calculate consistency details for a matrix
+    const calculateConsistencyDetails = (matrix: number[][], priorities: number[]) => {
+      const n = matrix.length;
+      const weightedSum = matrix.map((row) => row.reduce((sum, val, j) => sum + val * priorities[j], 0));
+      const lambdaValues = weightedSum.map((ws, i) => ws / priorities[i]);
+      const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n;
+      const CI = (lambdaMax - n) / (n - 1);
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59;
+      const CR = CI / RI;
+      return { lambdaMax, CI, RI, CR, weightedSum, lambdaValues };
+    };
+
+    // Process aggregated results data
+    if ("matrices" in aggregatedResults) {
+      const { matrices, priorities, consistency, ranking, finalScores } = aggregatedResults as Exclude<AggregatedResults, { acceptedCount: 0 }>;
+      const alternatives = ["AI", "CS", "SE"];
+      const criteriaNames = ["Coding Hours", "Study Hours", "Attendance"];
+
+      // Step 1: Criteria Comparison
+      csvRows.push(["Step 1: Criteria Comparison"]);
+      csvRows.push([]);
+
+      // Criteria Matrix with Geometric Means and Priority Vectors - formatted as requested
+      csvRows.push(["Criteria Pairwise Comparison Matrix"]);
+
+      // Calculate geometric means for criteria matrix
+      const criteriaGeometricMeans = matrices.criteria.map((row) => {
+        const product = row.reduce((acc, val) => acc * val, 1);
+        return Math.pow(product, 1 / 3);
+      });
+
+      // Add header row
+      csvRows.push(["", ...criteriaNames, "Geometric Means", "Priority Vectors (Weights)"]);
+
+      // Add each criteria row
+      criteriaNames.forEach((name, i) => {
+        const row = [...matrices.criteria[i].map(val => val.toFixed(4)), criteriaGeometricMeans[i].toFixed(4), priorities.criteria[i].toFixed(4)];
+        csvRows.push([name, ...row]);
+      });
+      csvRows.push([]);
+
+      // Criteria Consistency Calculation Details
+      const criteriaConsistencyDetails = calculateConsistencyDetails(matrices.criteria, priorities.criteria);
+      csvRows.push(["Criteria Consistency Calculation"]);
+      csvRows.push(["Lambda Max (λmax)", criteriaConsistencyDetails.lambdaMax.toFixed(4)]);
+      csvRows.push(["Consistency Index (CI)", criteriaConsistencyDetails.CI.toFixed(4)]);
+      csvRows.push(["Random Index (RI)", criteriaConsistencyDetails.RI.toFixed(2)]);
+      csvRows.push(["Consistency Ratio (CR)", criteriaConsistencyDetails.CR.toFixed(4)]);
+      csvRows.push(["Status", criteriaConsistencyDetails.CR <= 0.1000 ? "Accepted" : "Needs Review"]);
+      csvRows.push([]);
+
+      // Steps 2-4: Alternative Comparisons
+      const stepsData = [
+        { key: "coding", label: "Coding_Hours", matrix: matrices.coding, priority: priorities.coding, cons: consistency.coding },
+        { key: "study", label: "Study_Hours", matrix: matrices.study, priority: priorities.study, cons: consistency.study },
+        { key: "attendance", label: "Attendance", matrix: matrices.attendance, priority: priorities.attendance, cons: consistency.attendance },
+      ];
+
+      stepsData.forEach((item, stepIndex) => {
+        csvRows.push([`Step ${stepIndex + 2}: Alternatives with respect to ${item.label}`]);
+        csvRows.push([]);
+
+        // Alternative Matrix with Geometric Means and Priority Vectors - formatted as requested
+        csvRows.push([`${item.label} Pairwise Comparison Matrix`]);
+
+        // Add the matrix in the requested format
+        const altMatrix = item.matrix;
+        const altGeometricMeans = altMatrix.map((row) => {
+          const product = row.reduce((acc, val) => acc * val, 1);
+          return Math.pow(product, 1 / 3);
+        });
+
+        // Add header row
+        csvRows.push(["", ...alternatives, "Geometric Means", "Priority Vectors (Weights)"]);
+
+        // Add each alternative row
+        alternatives.forEach((alt, i) => {
+          const row = [...altMatrix[i].map(val => val.toFixed(4)), altGeometricMeans[i].toFixed(4), item.priority[i].toFixed(4)];
+          csvRows.push([alt, ...row]);
+        });
+        csvRows.push([]);
+
+        // Consistency Calculation Details in the requested format
+        const altConsistencyDetails = calculateConsistencyDetails(item.matrix, item.priority);
+        csvRows.push([`${item.label} Consistency Calculation`]);
+        csvRows.push(["Lambda Max (λmax)", altConsistencyDetails.lambdaMax.toFixed(4)]);
+        csvRows.push(["Consistency Index (CI)", altConsistencyDetails.CI.toFixed(4)]);
+        csvRows.push(["Random Index (RI)", altConsistencyDetails.RI.toFixed(2)]);
+        csvRows.push(["Consistency Ratio (CR)", altConsistencyDetails.CR.toFixed(4)]);
+        csvRows.push(["Status", altConsistencyDetails.CR <= 0.1000 ? "Accepted" : "Needs Review"]);
+        csvRows.push([]);
+      });
+
+      // Step 5: Final Score Calculation
+      csvRows.push(["Step 5: Final Score Calculation"]);
+      csvRows.push([]);
+
+      alternatives.forEach((alt, i) => {
+        csvRows.push([`${alt} Calculation`]);
+        csvRows.push(["Criteria Weight 1 (Coding)", (priorities.criteria[0] || 0).toFixed(4)]);
+        csvRows.push(["Alternative Weight 1 (Coding)", (priorities.coding[i] || 0).toFixed(4)]);
+        csvRows.push(["Criteria Weight 2 (Study)", (priorities.criteria[1] || 0).toFixed(4)]);
+        csvRows.push(["Alternative Weight 2 (Study)", (priorities.study[i] || 0).toFixed(4)]);
+        csvRows.push(["Criteria Weight 3 (Attendance)", (priorities.criteria[2] || 0).toFixed(4)]);
+        csvRows.push(["Alternative Weight 3 (Attendance)", (priorities.attendance[i] || 0).toFixed(4)]);
+        csvRows.push(["Intermediate Calculation 1", ((priorities.criteria[0] || 0) * (priorities.coding[i] || 0)).toFixed(4)]);
+        csvRows.push(["Intermediate Calculation 2", ((priorities.criteria[1] || 0) * (priorities.study[i] || 0)).toFixed(4)]);
+        csvRows.push(["Intermediate Calculation 3", ((priorities.criteria[2] || 0) * (priorities.attendance[i] || 0)).toFixed(4)]);
+        csvRows.push(["Final Score", finalScores[i].toFixed(4)]);
+        csvRows.push([]);
+      });
+
+      // Final Ranking
+      csvRows.push(["Final Ranking"]);
+      csvRows.push(["Rank", "Alternative", "Score"]);
+      ranking.forEach((item: any, i: number) => {
+        csvRows.push([i + 1, item.name, item.score.toFixed(4)]);
+      });
+      csvRows.push([]);
+    }
+
+    // Convert to CSV string
+    const csvContent = csvRows.map((row) => {
+      // Properly escape commas and quotes in values
+      return row.map(field => {
+        if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+          return `"${field.replace(/"/g, '""')}"`;
+        }
+        return field;
+      }).join(',');
+    }).join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `aggregated_ahp_results_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const downloadAllExpertsCSV = () => {
     if (experts.length === 0) {
-      alert("No expert submissions available to download.");
+      toast({
+        title: "No Data Available",
+        description: "No expert submissions available to download.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1296,6 +1539,135 @@ export default function AdminDashboard() {
       csvRows.push([]); // Extra space between experts
     });
 
+    // Add aggregated results at the end
+    if (aggregatedResults && !("acceptedCount" in aggregatedResults && aggregatedResults.acceptedCount === 0)) {
+      csvRows.push([Array(50).fill("=").join("")]);
+      csvRows.push(["AGGREGATED RESULTS"]);
+      csvRows.push([Array(50).fill("=").join("")]);
+      csvRows.push([]);
+
+      // Add step acceptance summary
+      if ("stepAcceptance" in aggregatedResults) {
+        const { stepAcceptance } = aggregatedResults as Exclude<AggregatedResults, { acceptedCount: 0 }>;
+        csvRows.push(["Step Acceptance Summary"]);
+        csvRows.push(["Step", "Accepted Count", "Needs Review Count"]);
+        csvRows.push(["Step 1: Criteria", stepAcceptance.criteria.accepted, stepAcceptance.criteria.needsReview]);
+        csvRows.push(["Step 2: Coding Hours", stepAcceptance.coding.accepted, stepAcceptance.coding.needsReview]);
+        csvRows.push(["Step 3: Study Hours", stepAcceptance.study.accepted, stepAcceptance.study.needsReview]);
+        csvRows.push(["Step 4: Attendance", stepAcceptance.attendance.accepted, stepAcceptance.attendance.needsReview]);
+        csvRows.push([]);
+      }
+
+      // Process aggregated results data
+      if ("matrices" in aggregatedResults) {
+        const { matrices, priorities, consistency, ranking, finalScores } = aggregatedResults as Exclude<AggregatedResults, { acceptedCount: 0 }>;
+        const alternatives = ["AI", "CS", "SE"];
+        const criteriaNames = ["Coding Hours", "Study Hours", "Attendance"];
+
+        // Step 1: Criteria Comparison
+        csvRows.push(["Step 1: Criteria Comparison"]);
+        csvRows.push([]);
+
+        // Criteria Matrix with Geometric Means and Priority Vectors - formatted as requested
+        csvRows.push(["Criteria Pairwise Comparison Matrix"]);
+
+        // Calculate geometric means for criteria matrix
+        const criteriaGeometricMeans = matrices.criteria.map((row) => {
+          const product = row.reduce((acc, val) => acc * val, 1);
+          return Math.pow(product, 1 / 3);
+        });
+
+        // Add header row
+        csvRows.push(["", ...criteriaNames, "Geometric Means", "Priority Vectors (Weights)"]);
+
+        // Add each criteria row
+        criteriaNames.forEach((name, i) => {
+          const row = [...matrices.criteria[i].map(val => val.toFixed(4)), criteriaGeometricMeans[i].toFixed(4), priorities.criteria[i].toFixed(4)];
+          csvRows.push([name, ...row]);
+        });
+        csvRows.push([]);
+
+        // Criteria Consistency Calculation Details
+        const criteriaConsistencyDetails = calculateConsistencyDetails(matrices.criteria, priorities.criteria);
+        csvRows.push(["Criteria Consistency Calculation"]);
+        csvRows.push(["Lambda Max (λmax)", criteriaConsistencyDetails.lambdaMax.toFixed(4)]);
+        csvRows.push(["Consistency Index (CI)", criteriaConsistencyDetails.CI.toFixed(4)]);
+        csvRows.push(["Random Index (RI)", criteriaConsistencyDetails.RI.toFixed(2)]);
+        csvRows.push(["Consistency Ratio (CR)", criteriaConsistencyDetails.CR.toFixed(4)]);
+        csvRows.push(["Status", criteriaConsistencyDetails.CR <= 0.1000 ? "Accepted" : "Needs Review"]);
+        csvRows.push([]);
+
+        // Steps 2-4: Alternative Comparisons
+        const stepsData = [
+          { key: "coding", label: "Coding_Hours", matrix: matrices.coding, priority: priorities.coding, cons: consistency.coding },
+          { key: "study", label: "Study_Hours", matrix: matrices.study, priority: priorities.study, cons: consistency.study },
+          { key: "attendance", label: "Attendance", matrix: matrices.attendance, priority: priorities.attendance, cons: consistency.attendance },
+        ];
+
+        stepsData.forEach((item, stepIndex) => {
+          csvRows.push([`Step ${stepIndex + 2}: Alternatives with respect to ${item.label}`]);
+          csvRows.push([]);
+
+          // Alternative Matrix with Geometric Means and Priority Vectors - formatted as requested
+          csvRows.push([`${item.label} Pairwise Comparison Matrix`]);
+
+          // Add the matrix in the requested format
+          const altMatrix = item.matrix;
+          const altGeometricMeans = altMatrix.map((row) => {
+            const product = row.reduce((acc, val) => acc * val, 1);
+            return Math.pow(product, 1 / 3);
+          });
+
+          // Add header row
+          csvRows.push(["", ...alternatives, "Geometric Means", "Priority Vectors (Weights)"]);
+
+          // Add each alternative row
+          alternatives.forEach((alt, i) => {
+            const row = [...altMatrix[i].map(val => val.toFixed(4)), altGeometricMeans[i].toFixed(4), item.priority[i].toFixed(4)];
+            csvRows.push([alt, ...row]);
+          });
+          csvRows.push([]);
+
+          // Consistency Calculation Details in the requested format
+          const altConsistencyDetails = calculateConsistencyDetails(item.matrix, item.priority);
+          csvRows.push([`${item.label} Consistency Calculation`]);
+          csvRows.push(["Lambda Max (λmax)", altConsistencyDetails.lambdaMax.toFixed(4)]);
+          csvRows.push(["Consistency Index (CI)", altConsistencyDetails.CI.toFixed(4)]);
+          csvRows.push(["Random Index (RI)", altConsistencyDetails.RI.toFixed(2)]);
+          csvRows.push(["Consistency Ratio (CR)", altConsistencyDetails.CR.toFixed(4)]);
+          csvRows.push(["Status", altConsistencyDetails.CR <= 0.1000 ? "Accepted" : "Needs Review"]);
+          csvRows.push([]);
+        });
+
+        // Step 5: Final Score Calculation
+        csvRows.push(["Step 5: Final Score Calculation"]);
+        csvRows.push([]);
+
+        alternatives.forEach((alt, i) => {
+          csvRows.push([`${alt} Calculation`]);
+          csvRows.push(["Criteria Weight 1 (Coding)", (priorities.criteria[0] || 0).toFixed(4)]);
+          csvRows.push(["Alternative Weight 1 (Coding)", (priorities.coding[i] || 0).toFixed(4)]);
+          csvRows.push(["Criteria Weight 2 (Study)", (priorities.criteria[1] || 0).toFixed(4)]);
+          csvRows.push(["Alternative Weight 2 (Study)", (priorities.study[i] || 0).toFixed(4)]);
+          csvRows.push(["Criteria Weight 3 (Attendance)", (priorities.criteria[2] || 0).toFixed(4)]);
+          csvRows.push(["Alternative Weight 3 (Attendance)", (priorities.attendance[i] || 0).toFixed(4)]);
+          csvRows.push(["Intermediate Calculation 1", ((priorities.criteria[0] || 0) * (priorities.coding[i] || 0)).toFixed(4)]);
+          csvRows.push(["Intermediate Calculation 2", ((priorities.criteria[1] || 0) * (priorities.study[i] || 0)).toFixed(4)]);
+          csvRows.push(["Intermediate Calculation 3", ((priorities.criteria[2] || 0) * (priorities.attendance[i] || 0)).toFixed(4)]);
+          csvRows.push(["Final Score", finalScores[i].toFixed(4)]);
+          csvRows.push([]);
+        });
+
+        // Final Ranking
+        csvRows.push(["Final Ranking"]);
+        csvRows.push(["Rank", "Alternative", "Score"]);
+        ranking.forEach((item: any, i: number) => {
+          csvRows.push([i + 1, item.name, item.score.toFixed(4)]);
+        });
+        csvRows.push([]);
+      }
+    }
+
     // Convert to CSV string
     const csvContent = csvRows.map((row) => {
       // Properly escape commas and quotes in values
@@ -1326,8 +1698,12 @@ export default function AdminDashboard() {
     if (!aggregatedResults) {
       return (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Aggregated Results</CardTitle>
+            <Button variant="outline" onClick={downloadAggregatedResultsCSV} className="gap-2" disabled={true}>
+              <Download className="h-4 w-4" />
+              Download (CSV)
+            </Button>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">No expert evaluations submitted yet.</p>
@@ -1339,8 +1715,12 @@ export default function AdminDashboard() {
     if ("acceptedCount" in aggregatedResults && aggregatedResults.acceptedCount === 0) {
       return (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Aggregated Results</CardTitle>
+            <Button variant="outline" onClick={downloadAggregatedResultsCSV} className="gap-2" disabled={true}>
+              <Download className="h-4 w-4" />
+              Download (CSV)
+            </Button>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
@@ -1362,6 +1742,14 @@ export default function AdminDashboard() {
 
     return (
       <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Aggregated Results</h2>
+          <Button variant="outline" onClick={downloadAggregatedResultsCSV} className="gap-2">
+            <Download className="h-4 w-4" />
+            Download Aggregated Results (CSV)
+          </Button>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
@@ -1920,6 +2308,39 @@ export default function AdminDashboard() {
                           <Download className="h-4 w-4" />
                           CSV
                         </Button>
+                        {/* </CHANGE> */}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete the submission from <strong>{expert.expert_name}</strong>. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteExpertSubmission(expert.id, expert.expert_name);
+                                }}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                         {/* </CHANGE> */}
                         <Badge variant={isFullyAccepted ? "default" : "destructive"}>
                           {isFullyAccepted ? "✓ All Accepted" : `⚠ ${acceptedCount}/4 Accepted`}
