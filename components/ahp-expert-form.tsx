@@ -31,25 +31,25 @@ export default function AHPExpertForm() {
   const [expertName, setExpertName] = useState("")
   const [expertEmail, setExpertEmail] = useState("")
 
-  const [criteriaMatrix, setCriteriaMatrix] = useState({
+  const [criteriaMatrix, setCriteriaMatrix] = useState<Record<string, number>>({
     "0-1": 1,
     "0-2": 1,
     "1-2": 1,
   })
 
-  const [codingHoursMatrix, setCodingHoursMatrix] = useState({
+  const [codingHoursMatrix, setCodingHoursMatrix] = useState<Record<string, number>>({
     "0-1": 1,
     "0-2": 1,
     "1-2": 1,
   })
 
-  const [studyHoursMatrix, setStudyHoursMatrix] = useState({
+  const [studyHoursMatrix, setStudyHoursMatrix] = useState<Record<string, number>>({
     "0-1": 1,
     "0-2": 1,
     "1-2": 1,
   })
 
-  const [attendanceMatrix, setAttendanceMatrix] = useState({
+  const [attendanceMatrix, setAttendanceMatrix] = useState<Record<string, number>>({
     "0-1": 1,
     "0-2": 1,
     "1-2": 1,
@@ -104,7 +104,8 @@ export default function AHPExpertForm() {
 
     const lambdaMax = weightedSum.reduce((sum, val, i) => sum + val / priorities[i], 0) / n
     const CI = (lambdaMax - n) / (n - 1)
-    const RI = [0, 0, 0.58, 0.9, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49][n]
+    const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+    const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
     const CR = CI / RI
 
     return { lambdaMax, CI, CR, weightedSum }

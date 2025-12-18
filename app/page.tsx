@@ -41,19 +41,11 @@ export default function Home() {
               <p className="text-sm text-muted-foreground mb-4">
                 Access comprehensive analysis, view all expert evaluations, and see aggregated rankings
               </p>
-              <div className="space-y-2">
-                <Link href="/admin">
-                  <Button size="lg" variant="outline" className="w-full bg-transparent">
-                    Admin Login
-                  </Button>
-                </Link>
-                <Link href="/auth/sign-up">
-                  <Button size="lg" variant="secondary" className="w-full">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Create Admin Account
-                  </Button>
-                </Link>
-              </div>
+              <Link href="/admin">
+                <Button size="lg" variant="outline" className="w-full bg-transparent">
+                  Admin Login
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

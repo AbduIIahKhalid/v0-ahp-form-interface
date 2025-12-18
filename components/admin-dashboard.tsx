@@ -10,23 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Loader2, CheckCircle2, TrendingUp, Users, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const RI_VALUES: Record<number, number> = {
-  1: 0.0,
-  2: 0.0,
-  3: 0.58,
-  4: 0.9,
-  5: 1.12,
-  6: 1.24,
-  7: 1.32,
-  8: 1.41,
-  9: 1.45,
-  10: 1.49,
-  11: 1.51,
-  12: 1.53,
-  13: 1.56,
-  14: 1.58,
-  15: 1.59,
-}
+const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49, 1.51, 1.53, 1.56, 1.58, 1.59]
 
 type Expert = {
   id: string
@@ -97,7 +81,8 @@ type AggregatedResults =
   | {
       acceptedCount: 0
       totalCount: number
-      needsReviewCount: 0 // Corrected to match the provided snippet for this branch
+      needsReviewCount: number
+      ranking: { name: string; score: number }[]
     }
 
 // Helper function to build a full matrix from an upper triangular representation
@@ -165,28 +150,28 @@ export default function AdminDashboard() {
 
     const stepAcceptance = {
       criteria: {
-        accepted: expertsData.filter((e) => e.submission.consistency_ratios.criteria < 0.10).length,
-        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.criteria > 0.1).length,
+        accepted: expertsData.filter((e) => e.submission.consistency_ratios.criteria <= 0.1000).length,
+        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.criteria > 0.1000).length,
       },
       coding: {
-        accepted: expertsData.filter((e) => e.submission.consistency_ratios.coding < 0.10).length,
-        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.coding > 0.1).length,
+        accepted: expertsData.filter((e) => e.submission.consistency_ratios.coding <= 0.1000).length,
+        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.coding > 0.10).length,
       },
       study: {
-        accepted: expertsData.filter((e) => e.submission.consistency_ratios.study < 0.10).length,
-        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.study > 0.1).length,
+        accepted: expertsData.filter((e) => e.submission.consistency_ratios.study <= 0.1000).length,
+        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.study > 0.1000).length,
       },
       attendance: {
-        accepted: expertsData.filter((e) => e.submission.consistency_ratios.attendance < 0.10).length,
-        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.attendance > 0.1).length,
+        accepted: expertsData.filter((e) => e.submission.consistency_ratios.attendance <= 0.1000).length,
+        needsReview: expertsData.filter((e) => e.submission.consistency_ratios.attendance > 0.1000).length,
       },
     }
 
     // Filter experts per step - only include those with CR <= 0.10 for each specific step
-    const acceptedForCriteria = expertsData.filter((e) => e.submission.consistency_ratios.criteria <= 0.1)
-    const acceptedForCoding = expertsData.filter((e) => e.submission.consistency_ratios.coding <= 0.1)
-    const acceptedForStudy = expertsData.filter((e) => e.submission.consistency_ratios.study <= 0.1)
-    const acceptedForAttendance = expertsData.filter((e) => e.submission.consistency_ratios.attendance <= 0.1)
+    const acceptedForCriteria = expertsData.filter((e) => e.submission.consistency_ratios.criteria <= 0.1000)
+    const acceptedForCoding = expertsData.filter((e) => e.submission.consistency_ratios.coding <= 0.1000)
+    const acceptedForStudy = expertsData.filter((e) => e.submission.consistency_ratios.study <= 0.1000)
+    const acceptedForAttendance = expertsData.filter((e) => e.submission.consistency_ratios.attendance <= 0.1000)
 
     // If no experts are accepted for any step, return early
     if (
@@ -199,6 +184,7 @@ export default function AdminDashboard() {
         acceptedCount: 0,
         totalCount: expertsData.length,
         needsReviewCount: expertsData.length,
+        ranking: [],
       })
       return
     }
@@ -282,8 +268,9 @@ export default function AdminDashboard() {
       const weightedSum = matrix.map((row) => row.reduce((sum, val, j) => sum + val * priorities[j], 0))
       const lambdaValues = weightedSum.map((ws, i) => ws / priorities[i])
       const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n
-      const RI = RI_VALUES[n] || 1.59
       const CI = (lambdaMax - n) / (n - 1)
+      const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
       const CR = CI / RI
       return { lambdaMax, CI, CR, RI }
     }
@@ -490,7 +477,8 @@ export default function AdminDashboard() {
       const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n
 
       const CI = (lambdaMax - n) / (n - 1)
-      const RI = RI_VALUES[n] || 1.59
+      const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
       const CR = CI / RI
 
       return { lambdaMax, CI, CR, RI, weightedSum, lambdaValues }
@@ -680,11 +668,11 @@ export default function AdminDashboard() {
           </div>
           <div>
             <p className="text-sm text-gray-600">CR (Consistency Ratio)</p>
-            <p className={`text-lg font-bold ${consistency.CR < 0.1 ? "text-green-600" : "text-red-600"}`}>
+            <p className={`text-lg font-bold ${consistency.CR <= 0.10 ? "text-green-600" : "text-red-600"}`}>
               {consistency.CR.toFixed(4)}
             </p>
-            <Badge variant={consistency.CR < 0.1 ? "default" : "destructive"} className="mt-1">
-              {consistency.CR < 0.1 ? "✓ Acceptable" : "✗ Needs Review"}
+            <Badge variant={consistency.CR <= 0.1000 ? "default" : "destructive"} className="mt-1">
+              {consistency.CR <= 0.1000 ? "✓ Acceptable" : "✗ Needs Review"}
             </Badge>
           </div>
         </div>
@@ -698,7 +686,7 @@ export default function AdminDashboard() {
           <p className="font-mono text-xs text-gray-600 mt-1">
             CR = CI / RI = {consistency.CI.toFixed(4)} / {consistency.RI.toFixed(4)} = {consistency.CR.toFixed(4)}
           </p>
-          <p className="text-xs text-gray-600 mt-2">✔️ CR {"<"} 0.10 → Judgments are consistent</p>
+          <p className="text-xs text-gray-600 mt-2">✔️ CR {"<="} 0.10 → Judgments are consistent</p>
         </div>
       </div>
     )
@@ -922,7 +910,8 @@ export default function AdminDashboard() {
       const lambdaValues = weightedSum.map((ws, i) => ws / priorities[i])
       const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n
       const CI = (lambdaMax - n) / (n - 1)
-      const RI = RI_VALUES[n] || 1.59
+      const RI_VALUES = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
       const CR = CI / RI
       return { lambdaMax, CI, RI, CR }
     }
@@ -1020,11 +1009,11 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-xs text-gray-600 font-medium">CR</p>
-              <p className={`text-sm font-bold ${consistency.CR < 0.1 ? "text-green-600" : "text-red-600"}`}>
+              <p className={`text-sm font-bold ${consistency.CR <= 0.1000 ? "text-green-600" : "text-red-600"}`}>
                 {consistency.CR.toFixed(4)}
               </p>
-              <Badge variant={consistency.CR < 0.1 ? "default" : "destructive"} className="mt-1 text-xs">
-                {consistency.CR < 0.1 ? "Accepted" : "Not Accepted"}
+              <Badge variant={consistency.CR <= 0.1000 ? "default" : "destructive"} className="mt-1 text-xs">
+                {consistency.CR <= 0.1000 ? "Accepted" : "Not Accepted"}
               </Badge>
             </div>
           </div>
@@ -1106,7 +1095,6 @@ export default function AdminDashboard() {
 
   const downloadExpertCSV = (expert: any) => {
     const crs = expert.submission.consistency_ratios
-    const priorities = expert.submission.calculation_details?.priorities || {}
 
     // Prepare CSV data
     const csvRows = []
@@ -1123,73 +1111,77 @@ export default function AdminDashboard() {
     // Consistency Summary
     csvRows.push(["Consistency Summary"])
     csvRows.push(["Step", "Consistency Ratio (CR)", "Status"])
-    csvRows.push(["Step 1: Criteria", crs.criteria.toFixed(4), crs.criteria <= 0.1 ? "Accepted" : "Needs Review"])
-    csvRows.push(["Step 2: Coding Hours", crs.coding.toFixed(4), crs.coding <= 0.1 ? "Accepted" : "Needs Review"])
-    csvRows.push(["Step 3: Study Hours", crs.study.toFixed(4), crs.study <= 0.1 ? "Accepted" : "Needs Review"])
-    csvRows.push(["Step 4: Attendance", crs.attendance.toFixed(4), crs.attendance <= 0.1 ? "Accepted" : "Needs Review"])
+    csvRows.push(["Step 1: Criteria", crs.criteria.toFixed(4), crs.criteria <= 0.1000 ? "Accepted" : "Needs Review"])
+    csvRows.push(["Step 2: Coding Hours", crs.coding.toFixed(4), crs.coding <= 0.1000 ? "Accepted" : "Needs Review"])
+    csvRows.push(["Step 3: Study Hours", crs.study.toFixed(4), crs.study <= 0.1000 ? "Accepted" : "Needs Review"])
+    csvRows.push(["Step 4: Attendance", crs.attendance.toFixed(4), crs.attendance <= 0.1000 ? "Accepted" : "Needs Review"])
     csvRows.push([])
 
-    // Step 1: Criteria Pairwise Comparison Matrix
-    csvRows.push(["Step 1: Criteria Pairwise Comparison Matrix"])
-    csvRows.push(["", "Coding Hours", "Study Hours", "Attendance"])
-    const criteriaMatrix = expert.submission.criteria_matrix
-    const criteriaNames = ["Coding Hours", "Study Hours", "Attendance"]
-    const criteriaFull = buildFullMatrix(criteriaMatrix, 3)
-    criteriaFull.forEach((row: number[], i: number) => {
-      csvRows.push([criteriaNames[i], ...row.map((v: number) => v.toFixed(4))])
+    // Function to calculate consistency details for a matrix
+    const calculateConsistencyDetails = (matrix: number[][], priorities: number[]) => {
+      const n = matrix.length
+      const weightedSum = matrix.map((row) => row.reduce((sum, val, j) => sum + val * priorities[j], 0))
+      const lambdaValues = weightedSum.map((ws, i) => ws / priorities[i])
+      const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n
+      const CI = (lambdaMax - n) / (n - 1)
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
+      const CR = CI / RI
+      return { lambdaMax, CI, RI, CR, weightedSum, lambdaValues }
+    }
+
+    // Process each step with detailed calculations
+    const steps = [
+      { name: "Criteria", matrix: expert.submission.criteria_matrix, labels: ["Coding Hours", "Study Hours", "Attendance"] },
+      { name: "Coding Hours", matrix: expert.submission.coding_hours_matrix, labels: ["AI", "CS", "SE"] },
+      { name: "Study Hours", matrix: expert.submission.study_hours_matrix, labels: ["AI", "CS", "SE"] },
+      { name: "Attendance", matrix: expert.submission.attendance_matrix, labels: ["AI", "CS", "SE"] }
+    ]
+
+    steps.forEach((step, index) => {
+      const fullMatrix = buildFullMatrix(step.matrix, 3)
+      const priorities = calculatePriorityVector(fullMatrix)
+
+      // Calculate geometric means
+      const geometricMeans = fullMatrix.map((row) => {
+        const product = row.reduce((acc, val) => acc * val, 1)
+        return Math.pow(product, 1 / row.length)
+      })
+
+      const consistency = calculateConsistencyDetails(fullMatrix, priorities)
+
+      // Add step header
+      csvRows.push([`Step ${index + 1}: ${step.name} Comparison`])
+      csvRows.push([])
+
+      // Combined format with Pairwise Comparison Matrix, Geometric Means, and Priority Vectors
+      csvRows.push([`${step.name} Pairwise Comparison Matrix`])
+      const headerRow = [...step.labels, "Geometric Means", "Priority Vectors (Weights)"]
+      csvRows.push(["", ...headerRow])
+
+      step.labels.forEach((name, i) => {
+        csvRows.push([name, ...fullMatrix[i].map(val => val.toFixed(4)), geometricMeans[i].toFixed(4), priorities[i].toFixed(4)])
+      })
+      csvRows.push([])
+
+      // Consistency Calculation Details in beautiful format
+      csvRows.push(["Lambda Max (λmax)", consistency.lambdaMax.toFixed(4)])
+      csvRows.push(["Consistency Index (CI)", consistency.CI.toFixed(4)])
+      csvRows.push(["Random Index (RI)", consistency.RI.toFixed(2)])
+      csvRows.push(["Consistency Ratio (CR)", consistency.CR.toFixed(4)])
+      csvRows.push(["Status", consistency.CR <= 0.1000 ? "Accepted" : "Needs Review"])
+      csvRows.push([])
     })
-    csvRows.push([])
-
-    // Step 2: Coding Hours Matrix
-    csvRows.push(["Step 2: Alternatives - Coding Hours"])
-    csvRows.push(["", "AI", "CS", "SE"])
-    const codingMatrix = expert.submission.coding_hours_matrix
-    const altNames = ["AI", "CS", "SE"]
-    const codingFull = buildFullMatrix(codingMatrix, 3)
-    codingFull.forEach((row: number[], i: number) => {
-      csvRows.push([altNames[i], ...row.map((v: number) => v.toFixed(4))])
-    })
-    csvRows.push([])
-
-    // Step 3: Study Hours Matrix
-    csvRows.push(["Step 3: Alternatives - Study Hours"])
-    csvRows.push(["", "AI", "CS", "SE"])
-    const studyMatrix = expert.submission.study_hours_matrix
-    const studyFull = buildFullMatrix(studyMatrix, 3)
-    studyFull.forEach((row: number[], i: number) => {
-      csvRows.push([altNames[i], ...row.map((v: number) => v.toFixed(4))])
-    })
-    csvRows.push([])
-
-    // Step 4: Attendance Matrix
-    csvRows.push(["Step 4: Alternatives - Attendance"])
-    csvRows.push(["", "AI", "CS", "SE"])
-    const attendanceMatrix = expert.submission.attendance_matrix
-    const attendanceFull = buildFullMatrix(attendanceMatrix, 3)
-    attendanceFull.forEach((row: number[], i: number) => {
-      csvRows.push([altNames[i], ...row.map((v: number) => v.toFixed(4))])
-    })
-    csvRows.push([])
-
-    // Priority Vectors
-    csvRows.push(["Priority Vectors"])
-    csvRows.push(["Criteria Priorities"])
-    csvRows.push(["Coding Hours", "Study Hours", "Attendance"])
-    const criteriaPriorities = calculatePriorityVector(criteriaFull)
-    csvRows.push(criteriaPriorities.map((v: number) => v.toFixed(4)))
-    csvRows.push([])
-
-    csvRows.push(["Alternative Priorities"])
-    csvRows.push(["", "AI", "CS", "SE"])
-    const codingPriorities = calculatePriorityVector(codingFull)
-    const studyPriorities = calculatePriorityVector(studyFull)
-    const attendancePriorities = calculatePriorityVector(attendanceFull)
-    csvRows.push(["Coding Hours", ...codingPriorities.map((v: number) => v.toFixed(4))])
-    csvRows.push(["Study Hours", ...studyPriorities.map((v: number) => v.toFixed(4))])
-    csvRows.push(["Attendance", ...attendancePriorities.map((v: number) => v.toFixed(4))])
 
     // Convert to CSV string
-    const csvContent = csvRows.map((row) => row.join(",")).join("\n")
+    const csvContent = csvRows.map((row) => {
+      // Properly escape commas and quotes in values
+      return row.map(field => {
+        if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+          return `"${field.replace(/"/g, '""')}"`;
+        }
+        return field;
+      }).join(',');
+    }).join('\n')
 
     // Create download
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
@@ -1206,6 +1198,129 @@ export default function AdminDashboard() {
     document.body.removeChild(link)
   }
   // </CHANGE>
+
+  const downloadAllExpertsCSV = () => {
+    if (experts.length === 0) {
+      alert("No expert submissions available to download.");
+      return;
+    }
+
+    // Prepare CSV data
+    const csvRows = [];
+
+    // Add header information
+    csvRows.push(["AHP All Expert Evaluations Report"]);
+    csvRows.push(["Generated on:", new Date().toLocaleString()]);
+    csvRows.push(["Total Experts:", experts.length]);
+    csvRows.push([]);
+
+    // Function to calculate consistency details for a matrix
+    const calculateConsistencyDetails = (matrix: number[][], priorities: number[]) => {
+      const n = matrix.length
+      const weightedSum = matrix.map((row) => row.reduce((sum, val, j) => sum + val * priorities[j], 0))
+      const lambdaValues = weightedSum.map((ws, i) => ws / priorities[i])
+      const lambdaMax = lambdaValues.reduce((a, b) => a + b, 0) / n
+      const CI = (lambdaMax - n) / (n - 1)
+      const RI = n < RI_VALUES.length ? RI_VALUES[n] : 1.59
+      const CR = CI / RI
+      return { lambdaMax, CI, RI, CR, weightedSum, lambdaValues }
+    }
+
+    // Process each expert with their detailed calculations
+    experts.forEach((expert, index) => {
+      // Add expert header
+      csvRows.push([`--- Expert ${index + 1}: ${expert.expert_name} ---`]);
+      csvRows.push([]);
+
+      // Expert information
+      csvRows.push(["Expert Information"]);
+      csvRows.push(["Expert ID", expert.id]);
+      csvRows.push(["Expert Name", expert.expert_name]);
+      csvRows.push(["Expert Email", expert.expert_email || ""]);
+      csvRows.push(["Submitted At", new Date(expert.submitted_at).toLocaleString()]);
+      csvRows.push([]);
+
+      // Consistency Summary
+      const crs = expert.submission.consistency_ratios;
+      csvRows.push(["Consistency Summary"]);
+      csvRows.push(["Step", "Consistency Ratio (CR)", "Status"]);
+      csvRows.push(["Step 1: Criteria", crs.criteria.toFixed(4), crs.criteria <= 0.1000 ? "Accepted" : "Needs Review"]);
+      csvRows.push(["Step 2: Coding Hours", crs.coding.toFixed(4), crs.coding <= 0.1000 ? "Accepted" : "Needs Review"]);
+      csvRows.push(["Step 3: Study Hours", crs.study.toFixed(4), crs.study <= 0.1000 ? "Accepted" : "Needs Review"]);
+      csvRows.push(["Step 4: Attendance", crs.attendance.toFixed(4), crs.attendance <= 0.1000 ? "Accepted" : "Needs Review"]);
+      csvRows.push([]);
+
+      // Process each step with detailed calculations
+      const steps = [
+        { name: "Criteria", matrix: expert.submission.criteria_matrix, labels: ["Coding Hours", "Study Hours", "Attendance"] },
+        { name: "Coding Hours", matrix: expert.submission.coding_hours_matrix, labels: ["AI", "CS", "SE"] },
+        { name: "Study Hours", matrix: expert.submission.study_hours_matrix, labels: ["AI", "CS", "SE"] },
+        { name: "Attendance", matrix: expert.submission.attendance_matrix, labels: ["AI", "CS", "SE"] }
+      ];
+
+      steps.forEach((step, stepIndex) => {
+        const fullMatrix = buildFullMatrix(step.matrix, 3);
+        const priorities = calculatePriorityVector(fullMatrix);
+
+        // Calculate geometric means
+        const geometricMeans = fullMatrix.map((row) => {
+          const product = row.reduce((acc, val) => acc * val, 1)
+          return Math.pow(product, 1 / row.length)
+        });
+
+        const consistency = calculateConsistencyDetails(fullMatrix, priorities);
+
+        // Add step header
+        csvRows.push([`Step ${stepIndex + 1}: ${step.name} Comparison`]);
+        csvRows.push([]);
+
+        // Combined format with Pairwise Comparison Matrix, Geometric Means, and Priority Vectors
+        csvRows.push([`${step.name} Pairwise Comparison Matrix`]);
+        const headerRow = [...step.labels, "Geometric Means", "Priority Vectors (Weights)"];
+        csvRows.push(["", ...headerRow]);
+
+        step.labels.forEach((name, i) => {
+          csvRows.push([name, ...fullMatrix[i].map(val => val.toFixed(4)), geometricMeans[i].toFixed(4), priorities[i].toFixed(4)]);
+        });
+        csvRows.push([]);
+
+        // Consistency Calculation Details in beautiful format
+        csvRows.push(["Lambda Max (λmax)", consistency.lambdaMax.toFixed(4)]);
+        csvRows.push(["Consistency Index (CI)", consistency.CI.toFixed(4)]);
+        csvRows.push(["Random Index (RI)", consistency.RI.toFixed(2)]);
+        csvRows.push(["Consistency Ratio (CR)", consistency.CR.toFixed(4)]);
+        csvRows.push(["Status", consistency.CR <= 0.1000 ? "Accepted" : "Needs Review"]);
+        csvRows.push([]);
+      });
+
+      csvRows.push([]); // Extra space between experts
+    });
+
+    // Convert to CSV string
+    const csvContent = csvRows.map((row) => {
+      // Properly escape commas and quotes in values
+      return row.map(field => {
+        if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+          return `"${field.replace(/"/g, '""')}"`;
+        }
+        return field;
+      }).join(',');
+    }).join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `all_experts_ahp_submissions_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const renderAggregatedResults = () => {
     if (!aggregatedResults) {
@@ -1399,8 +1514,8 @@ export default function AdminDashboard() {
                   <span className="text-muted-foreground">CR:</span>{" "}
                   <span className="font-mono font-bold">{consistency?.criteria?.CR?.toFixed(4) || "N/A"}</span>
                   {consistency?.criteria?.CR !== undefined && (
-                    <Badge variant={consistency.criteria.CR < 0.1 ? "default" : "destructive"} className="ml-2">
-                      {consistency.criteria.CR < 0.1 ? "Accepted" : "Not Accepted"}
+                    <Badge variant={consistency.criteria.CR <= 0.1000 ? "default" : "destructive"} className="ml-2">
+                      {consistency.criteria.CR <= 0.1000 ? "Accepted" : "Not Accepted"}
                     </Badge>
                   )}
                 </div>
@@ -1539,8 +1654,8 @@ export default function AdminDashboard() {
                       <span className="text-muted-foreground">CR:</span>{" "}
                       <span className="font-mono font-bold">{item.cons?.CR?.toFixed(4) || "N/A"}</span>
                       {item.cons?.CR !== undefined && (
-                        <Badge variant={item.cons.CR < 0.1 ? "default" : "destructive"} className="ml-2">
-                          {item.cons.CR < 0.1 ? "Accepted" : "Not Accepted"}
+                        <Badge variant={item.cons.CR <= 0.1000 ? "default" : "destructive"} className="ml-2">
+                          {item.cons.CR <= 0.1000 ? "Accepted" : "Not Accepted"}
                         </Badge>
                       )}
                     </div>
@@ -1638,10 +1753,10 @@ export default function AdminDashboard() {
     const crs = expert.submission.consistency_ratios
     return (
       count +
-      (crs.criteria <= 0.1 ? 1 : 0) +
-      (crs.coding <= 0.1 ? 1 : 0) +
-      (crs.study <= 0.1 ? 1 : 0) +
-      (crs.attendance <= 0.1 ? 1 : 0)
+      (crs.criteria <= 0.1000 ? 1 : 0) +
+      (crs.coding <= 0.1000 ? 1 : 0) +
+      (crs.study <= 0.1000 ? 1 : 0) +
+      (crs.attendance <= 0.1000 ? 1 : 0)
     )
   }, 0)
   const needsReviewSteps = totalSteps - acceptedSteps
@@ -1660,6 +1775,24 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold">AHP Admin Dashboard</h1>
           <p className="text-muted-foreground">View and analyze expert submissions</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setLoading(true);
+              fetchData();
+            }}
+            className="gap-2"
+            disabled={loading}
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading ? "Refreshing..." : "Refresh Data"}
+          </Button>
+          <Button variant="outline" onClick={downloadAllExpertsCSV} className="gap-2">
+            <Download className="h-4 w-4" />
+            Download All Submissions (CSV)
+          </Button>
         </div>
       </div>
 
@@ -1751,10 +1884,10 @@ export default function AdminDashboard() {
               {experts.map((expert, index) => {
                 const crs = expert.submission.consistency_ratios
                 const stepStatuses = {
-                  criteria: crs.criteria <= 0.1,
-                  coding: crs.coding <= 0.1,
-                  study: crs.study <= 0.1,
-                  attendance: crs.attendance <= 0.1,
+                  criteria: crs.criteria <= 0.1000,
+                  coding: crs.coding <= 0.1000,
+                  study: crs.study <= 0.1000,
+                  attendance: crs.attendance <= 0.1000,
                 }
                 const acceptedCount = Object.values(stepStatuses).filter(Boolean).length
                 const isFullyAccepted = acceptedCount === 4
@@ -1762,8 +1895,8 @@ export default function AdminDashboard() {
 
                 return (
                   <AccordionItem key={expert.id} value={`expert-${index}`}>
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center justify-between w-full pr-4 border-b">
+                      <AccordionTrigger className="hover:no-underline flex-1">
                         <div className="flex items-center gap-4">
                           <Badge variant="outline" className="font-mono">
                             #{index + 1}
@@ -1773,46 +1906,44 @@ export default function AdminDashboard() {
                             <div className="text-sm text-muted-foreground">{expert.expert_email}</div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              downloadExpertCSV(expert)
-                            }}
-                            className="gap-2"
-                          >
-                            <Download className="h-4 w-4" />
-                            CSV
-                          </Button>
-                          {/* </CHANGE> */}
-                          <Badge variant={isFullyAccepted ? "default" : "destructive"}>
-                            {isFullyAccepted ? "✓ All Accepted" : `⚠ ${acceptedCount}/4 Accepted`}
+                      </AccordionTrigger>
+                      <div className="flex items-center gap-2 pl-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            downloadExpertCSV(expert)
+                          }}
+                          className="gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          CSV
+                        </Button>
+                        {/* </CHANGE> */}
+                        <Badge variant={isFullyAccepted ? "default" : "destructive"}>
+                          {isFullyAccepted ? "✓ All Accepted" : `⚠ ${acceptedCount}/4 Accepted`}
+                        </Badge>
+                        <div className="flex gap-1">
+                          <Badge variant={stepStatuses.criteria ? "default" : "outline"} className="text-xs px-2">
+                            S1 {stepStatuses.criteria ? "✓" : "✗"}
                           </Badge>
-                          {!isFullyAccepted && (
-                            <div className="flex gap-1">
-                              <Badge variant={stepStatuses.criteria ? "default" : "outline"} className="text-xs px-2">
-                                S1 {stepStatuses.criteria ? "✓" : "✗"}
-                              </Badge>
-                              <Badge variant={stepStatuses.coding ? "default" : "outline"} className="text-xs px-2">
-                                S2 {stepStatuses.coding ? "✓" : "✗"}
-                              </Badge>
-                              <Badge variant={stepStatuses.study ? "default" : "outline"} className="text-xs px-2">
-                                S3 {stepStatuses.study ? "✓" : "✗"}
-                              </Badge>
-                              <Badge variant={stepStatuses.attendance ? "default" : "outline"} className="text-xs px-2">
-                                S4 {stepStatuses.attendance ? "✓" : "✗"}
-                              </Badge>
-                            </div>
-                          )}
-                          {/* </CHANGE> */}
-                          <Badge variant="outline" className="text-xs">
-                            {new Date(expert.submitted_at).toLocaleDateString()}
+                          <Badge variant={stepStatuses.coding ? "default" : "outline"} className="text-xs px-2">
+                            S2 {stepStatuses.coding ? "✓" : "✗"}
+                          </Badge>
+                          <Badge variant={stepStatuses.study ? "default" : "outline"} className="text-xs px-2">
+                            S3 {stepStatuses.study ? "✓" : "✗"}
+                          </Badge>
+                          <Badge variant={stepStatuses.attendance ? "default" : "outline"} className="text-xs px-2">
+                            S4 {stepStatuses.attendance ? "✓" : "✗"}
                           </Badge>
                         </div>
+                        {/* </CHANGE> */}
+                        <Badge variant="outline" className="text-xs">
+                          {new Date(expert.submitted_at).toLocaleDateString()}
+                        </Badge>
                       </div>
-                    </AccordionTrigger>
+                    </div>
                     <AccordionContent>
                       <div className="pt-4">{renderSimplifiedExpertCalculations(expert)}</div>
                     </AccordionContent>
