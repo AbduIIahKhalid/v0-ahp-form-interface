@@ -1,30 +1,76 @@
-# AHP form interface
+# AHP Form Interface
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+An automated system for expert form evaluation with acceptance/rejection functionality and aggregated calculation display.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/earnfistcoin-7392s-projects/v0-ahp-form-interface)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/hfywcIkZl8r)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://v0-ahp-form-interface-ajao.vercel.app/)
+[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app)
 
 ## Overview
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+This project automates the Analytic Hierarchy Process (AHP) form evaluation workflow. The interface streamlines expert form submissions, evaluation processes, and provides automated acceptance or rejection decisions. Additionally, the system calculates and displays aggregated results with complete calculation breakdowns for transparency and verification.
 
-## Deployment
+## Features
 
-Your project is live at:
+- **Expert Form Automation**: Streamlined process for expert form submissions
+- **Evaluation System**: Automated evaluation of submitted forms
+- **Acceptance/Rejection Logic**: Built-in decision-making system for form approval
+- **Aggregated Calculations**: Comprehensive calculation of results from multiple experts
+- **Complete Calculation Display**: Transparent view of all calculation steps and methodologies
+- **Real-time Processing**: Immediate feedback on form submissions and evaluations
 
-**[https://vercel.com/earnfistcoin-7392s-projects/v0-ahp-form-interface](https://vercel.com/earnfistcoin-7392s-projects/v0-ahp-form-interface)**
+## Live Demo
 
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.app/chat/hfywcIkZl8r](https://v0.app/chat/hfywcIkZl8r)**
+Check out the live application: **[https://v0-ahp-form-interface-ajao.vercel.app/](https://v0-ahp-form-interface-ajao.vercel.app/)**
 
 ## How It Works
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+1. Experts submit their evaluation forms through the interface
+2. The system processes and evaluates the submissions
+3. Automated acceptance or rejection decisions are made based on defined criteria
+4. Aggregated calculations are performed across all expert inputs
+5. Complete calculation breakdowns are displayed for verification
+6. Results are presented in an intuitive and transparent manner
+
+## Installation
+
+To run this project locally:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/[your-username]/v0-ahp-form-interface.git
+   cd v0-ahp-form-interface
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+3. Set up environment variables (if any):
+   ```bash
+   cp .env.example .env.local
+   # Then update the .env.local file with your configuration
+   ```
+
+4. Run the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+
+## Technologies Used
+
+- Next.js
+- TypeScript
+- Tailwind CSS
+- Supabase (for database and authentication)
+- Vercel (for deployment)
+
+## Contributing
+
+Feel free to contribute to this project by submitting issues or pull requests. For major changes, please open an issue first to discuss what you would like to change.
